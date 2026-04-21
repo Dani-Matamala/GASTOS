@@ -18,7 +18,7 @@ async function getDb() {
     db = new SQL.Database();
   }
 
-  db.run(`PRAGMA foreign_keys = ON;`);
+  db.pragma('foreign_keys = ON;');
 
   db.run(`
     CREATE TABLE IF NOT EXISTS categorias (
@@ -37,8 +37,24 @@ async function getDb() {
       tipo_pago TEXT NOT NULL CHECK(tipo_pago IN ('efectivo', 'mercado_pago', 'tarjeta_credito', 'tarjeta_debito', 'transferencia')),
       categoria_id INTEGER,
       fecha TEXT DEFAULT (date('now', 'localtime')),
+      es_cuotas INTEGER DEFAULT 0,
+      cuotas_total INTEGER DEFAULT 1,
+      monto_cuota REAL,
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS cuotas_detalle (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gasto_id INTEGER NOT NULL,
+      numero_cuota INTEGER NOT NULL,
+      monto REAL NOT NULL,
+      fecha_vencimiento TEXT NOT NULL,
+      pagada INTEGER DEFAULT 0,
+      fecha_pago TEXT,
+      FOREIGN KEY (gasto_id) REFERENCES gastos(id) ON DELETE CASCADE
     );
   `);
 

@@ -6,6 +6,7 @@ app.use(express.json());
 
 app.use('/api/categorias', require('./routes/categorias'));
 app.use('/api/gastos', require('./routes/gastos'));
+app.use('/api/cuotas', require('./routes/cuotas'));
 app.use('/api/resumen', require('./routes/resumen'));
 
 // Manejo de rutas no encontradas
