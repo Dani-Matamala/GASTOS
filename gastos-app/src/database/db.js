@@ -6,6 +6,12 @@ const DB_PATH = path.join(__dirname, '../../gastos.db');
 
 let db;
 
+function save() {
+  if (!db) return;
+  const data = db.export();
+  fs.writeFileSync(DB_PATH, Buffer.from(data));
+}
+
 async function getDb() {
   if (db) return db;
 
@@ -18,7 +24,7 @@ async function getDb() {
     db = new SQL.Database();
   }
 
-  db.pragma('foreign_keys = ON;');
+  db.run(`PRAGMA foreign_keys = ON;`);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS categorias (
@@ -58,15 +64,12 @@ async function getDb() {
     );
   `);
 
+  try { db.run(`ALTER TABLE gastos ADD COLUMN es_cuotas INTEGER DEFAULT 0`); } catch (e) {}
+  try { db.run(`ALTER TABLE gastos ADD COLUMN cuotas_total INTEGER DEFAULT 1`); } catch (e) {}
+  try { db.run(`ALTER TABLE gastos ADD COLUMN monto_cuota REAL`); } catch (e) {}
+
   save();
   return db;
-}
-
-// Guarda la DB en disco después de cada escritura
-function save() {
-  if (!db) return;
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
 }
 
 module.exports = { getDb, save };
