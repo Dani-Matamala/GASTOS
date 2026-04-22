@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCategorias, crearCategoria } from '../../api'
+import { getCategorias } from '../../api'
 
 const TIPOS_PAGO = [
   { value: 'efectivo', label: '💵 Efectivo' },
@@ -34,19 +34,29 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
   }
 
   useEffect(() => {
-    cargarCategorias()
-    if (gasto) {
-      setForm({
-        descripcion: gasto.descripcion || '',
-        monto: gasto.monto || '',
-        tipo_pago: gasto.tipo_pago || 'efectivo',
-        categoria_id: gasto.categoria_id || '',
-        fecha: gasto.fecha || new Date().toISOString().split('T')[0],
-        cuotas: gasto.cuotas_total || 1
-      })
-    } else {
-      setForm(INICIAL)
+    const fetchCategorias = async () => {
+      const data = await cargarCategorias()
+      setCategorias(data)
     }
+
+    fetchCategorias()
+
+    const updateForm = () => {
+      if (gasto) {
+        setForm({
+          descripcion: gasto.descripcion || '',
+          monto: gasto.monto || '',
+          tipo_pago: gasto.tipo_pago || 'efectivo',
+          categoria_id: gasto.categoria_id || '',
+          fecha: gasto.fecha || new Date().toISOString().split('T')[0],
+          cuotas: gasto.cuotas_total || 1,
+        });
+      } else {
+        setForm(INICIAL);
+      }
+    };
+
+    updateForm();
   }, [gasto])
 
   const handleChange = (e) => {
@@ -59,14 +69,13 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
     setErrorCategoria('')
     setGuardandoCategoria(true)
     try {
-      const res = await crearCategoria({ nombre: nuevaCategoria.trim() })
       const data = await cargarCategorias()
       // Seleccionar la nueva categoría automáticamente
       const nueva = data.find(c => c.nombre === nuevaCategoria.trim())
       if (nueva) setForm(f => ({ ...f, categoria_id: nueva.id }))
       setNuevaCategoria('')
       setCreandoCategoria(false)
-    } catch (e) {
+    } catch {
       setErrorCategoria('Error al crear la categoría')
     } finally {
       setGuardandoCategoria(false)
@@ -86,7 +95,7 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
         cuotas: Number(form.cuotas)
       })
       onClose()
-    } catch (e) {
+    } catch {
       setError('Ocurrió un error al guardar')
     } finally {
       setCargando(false)

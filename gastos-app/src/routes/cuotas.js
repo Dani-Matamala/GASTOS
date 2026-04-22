@@ -1,101 +1,64 @@
 const express = require('express');
 const router = express.Router();
-const { getDb, save } = require('../database/db');
+const { getDb } = require('../database/db');
 
-// GET todas las cuotas pendientes
 router.get('/', async (req, res) => {
   const db = await getDb();
-  const result = db.exec(`
-    SELECT cd.id, cd.gasto_id, cd.numero_cuota, cd.monto,
-           cd.fecha_vencimiento, cd.pagada, cd.fecha_pago,
-           g.descripcion as gasto_descripcion, g.cuotas_total
-    FROM cuotas_detalle cd
-    JOIN gastos g ON cd.gasto_id = g.id
-    ORDER BY cd.fecha_vencimiento ASC, cd.gasto_id
+  const { rows } = await db.query(`
+    SELECT cd.*, g.descripcion as gasto_descripcion, g.cuotas_total
+    FROM cuotas_detalle cd JOIN gastos g ON cd.gasto_id = g.id
+    ORDER BY cd.fecha_vencimiento ASC
   `);
-
-  const cuotas = result[0]
-    ? result[0].values.map(r => ({
-        id: r[0], gasto_id: r[1], numero_cuota: r[2], monto: r[3],
-        fecha_vencimiento: r[4], pagada: !!r[5], fecha_pago: r[6],
-        gasto_descripcion: r[7], cuotas_total: r[8]
-      }))
-    : [];
-  res.json(cuotas);
+  res.json(rows);
 });
 
-// GET cuotas por mes: /api/cuotas/mes/2026-04
+router.get('/pendientes', async (req, res) => {
+  const db = await getDb();
+  const { rows } = await db.query(`
+    SELECT TO_CHAR(fecha_vencimiento, 'YYYY-MM') as mes,
+           COUNT(*) as cantidad, SUM(monto) as total
+    FROM cuotas_detalle WHERE pagada = FALSE
+    GROUP BY mes ORDER BY mes ASC
+  `);
+  res.json(rows);
+});
+
 router.get('/mes/:mes', async (req, res) => {
   const db = await getDb();
-  const mes = req.params.mes; // formato: YYYY-MM
-
-  const result = db.exec(`
-    SELECT cd.id, cd.gasto_id, cd.numero_cuota, cd.monto,
-           cd.fecha_vencimiento, cd.pagada, cd.fecha_pago,
-           g.descripcion as gasto_descripcion, g.cuotas_total, g.tipo_pago
-    FROM cuotas_detalle cd
-    JOIN gastos g ON cd.gasto_id = g.id
-    WHERE strftime('%Y-%m', cd.fecha_vencimiento) = ?
+  const mes = req.params.mes;
+  const { rows } = await db.query(`
+    SELECT cd.*, g.descripcion as gasto_descripcion, g.cuotas_total, g.tipo_pago
+    FROM cuotas_detalle cd JOIN gastos g ON cd.gasto_id = g.id
+    WHERE TO_CHAR(cd.fecha_vencimiento, 'YYYY-MM') = $1
     ORDER BY cd.pagada ASC, cd.fecha_vencimiento ASC
   `, [mes]);
 
-  const cuotas = result[0]
-    ? result[0].values.map(r => ({
-        id: r[0], gasto_id: r[1], numero_cuota: r[2], monto: r[3],
-        fecha_vencimiento: r[4], pagada: !!r[5], fecha_pago: r[6],
-        gasto_descripcion: r[7], cuotas_total: r[8], tipo_pago: r[9]
-      }))
-    : [];
+  const total_mes = rows.reduce((acc, c) => acc + Number(c.monto), 0);
+  const total_pendiente = rows.filter(c => !c.pagada).reduce((acc, c) => acc + Number(c.monto), 0);
+  const total_pagado = rows.filter(c => c.pagada).reduce((acc, c) => acc + Number(c.monto), 0);
 
-  const total_mes = cuotas.reduce((acc, c) => acc + c.monto, 0);
-  const total_pendiente = cuotas.filter(c => !c.pagada).reduce((acc, c) => acc + c.monto, 0);
-  const total_pagado = cuotas.filter(c => c.pagada).reduce((acc, c) => acc + c.monto, 0);
-
-  res.json({ mes, total_mes, total_pendiente, total_pagado, cuotas });
+  res.json({ mes, total_mes, total_pendiente, total_pagado, cuotas: rows });
 });
 
-// GET cuotas pendientes agrupadas por mes (resumen futuro)
-router.get('/pendientes', async (req, res) => {
-  const db = await getDb();
-  const result = db.exec(`
-    SELECT strftime('%Y-%m', fecha_vencimiento) as mes,
-           COUNT(*) as cantidad, SUM(monto) as total
-    FROM cuotas_detalle
-    WHERE pagada = 0
-    GROUP BY mes ORDER BY mes ASC
-  `);
-
-  const pendientes = result[0]
-    ? result[0].values.map(r => ({ mes: r[0], cantidad: r[1], total: r[2] }))
-    : [];
-  res.json(pendientes);
-});
-
-// PATCH marcar cuota como pagada
 router.patch('/:id/pagar', async (req, res) => {
   const db = await getDb();
-  const hoy = new Date().toISOString().split('T')[0];
+  const { rows } = await db.query('SELECT * FROM cuotas_detalle WHERE id = $1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Cuota no encontrada' });
+  if (rows[0].pagada) return res.status(400).json({ error: 'La cuota ya fue pagada' });
 
-  const check = db.exec('SELECT * FROM cuotas_detalle WHERE id = ?', [req.params.id]);
-  if (!check[0]) return res.status(404).json({ error: 'Cuota no encontrada' });
-  if (check[0].values[0][5]) return res.status(400).json({ error: 'La cuota ya fue pagada' });
-
-  db.run(
-    'UPDATE cuotas_detalle SET pagada = 1, fecha_pago = ? WHERE id = ?',
-    [hoy, req.params.id]
-  );
-  save();
-  res.json({ mensaje: 'Cuota marcada como pagada', fecha_pago: hoy });
-});
-
-// PATCH desmarcar cuota como pagada
-router.patch('/:id/despagar', async (req, res) => {
-  const db = await getDb();
-  db.run(
-    'UPDATE cuotas_detalle SET pagada = 0, fecha_pago = NULL WHERE id = ?',
+  await db.query(
+    'UPDATE cuotas_detalle SET pagada = TRUE, fecha_pago = CURRENT_DATE WHERE id = $1',
     [req.params.id]
   );
-  save();
+  res.json({ mensaje: 'Cuota marcada como pagada' });
+});
+
+router.patch('/:id/despagar', async (req, res) => {
+  const db = await getDb();
+  await db.query(
+    'UPDATE cuotas_detalle SET pagada = FALSE, fecha_pago = NULL WHERE id = $1',
+    [req.params.id]
+  );
   res.json({ mensaje: 'Cuota desmarcada' });
 });
 
