@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCategorias } from '../../api'
+import { getCategorias, crearCategoria } from '../../api'
 
 const TIPOS_PAGO = [
   { value: 'efectivo', label: '💵 Efectivo' },
@@ -21,23 +21,56 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
 
+  // Estado para crear categoría inline
+  const [creandoCategoria, setCreandoCategoria] = useState(false)
+  const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [guardandoCategoria, setGuardandoCategoria] = useState(false)
+  const [errorCategoria, setErrorCategoria] = useState('')
+
+  const cargarCategorias = async () => {
+    const data = await getCategorias()
+    setCategorias(data)
+    return data
+  }
+
   useEffect(() => {
-    getCategorias().then(setCategorias)
+    cargarCategorias()
     if (gasto) {
-        const updatedForm = {
-            descripcion: gasto.descripcion || '',
-            monto: gasto.monto || '',
-            tipo_pago: gasto.tipo_pago || 'efectivo',
-            categoria_id: gasto.categoria_id || '',
-        };
-        // Using a timeout to defer the state update
-        setTimeout(() => setForm(updatedForm), 0);
+      setForm({
+        descripcion: gasto.descripcion || '',
+        monto: gasto.monto || '',
+        tipo_pago: gasto.tipo_pago || 'efectivo',
+        categoria_id: gasto.categoria_id || '',
+        fecha: gasto.fecha || new Date().toISOString().split('T')[0],
+        cuotas: gasto.cuotas_total || 1
+      })
+    } else {
+      setForm(INICIAL)
     }
   }, [gasto])
 
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm(f => ({ ...f, [name]: value }))
+  }
+
+  const handleCrearCategoria = async () => {
+    if (!nuevaCategoria.trim()) return setErrorCategoria('Escribí un nombre')
+    setErrorCategoria('')
+    setGuardandoCategoria(true)
+    try {
+      const res = await crearCategoria({ nombre: nuevaCategoria.trim() })
+      const data = await cargarCategorias()
+      // Seleccionar la nueva categoría automáticamente
+      const nueva = data.find(c => c.nombre === nuevaCategoria.trim())
+      if (nueva) setForm(f => ({ ...f, categoria_id: nueva.id }))
+      setNuevaCategoria('')
+      setCreandoCategoria(false)
+    } catch (e) {
+      setErrorCategoria('Error al crear la categoría')
+    } finally {
+      setGuardandoCategoria(false)
+    }
   }
 
   const handleSubmit = async () => {
@@ -53,7 +86,7 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
         cuotas: Number(form.cuotas)
       })
       onClose()
-    } catch {
+    } catch (e) {
       setError('Ocurrió un error al guardar')
     } finally {
       setCargando(false)
@@ -62,10 +95,10 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b">
+        <div className="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-bold text-gray-800">
             {gasto ? 'Editar gasto' : 'Nuevo gasto'}
           </h2>
@@ -115,20 +148,65 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
             </select>
           </div>
 
+          {/* Categoría con opción de crear inline */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Categoría</label>
-            <select
-              name="categoria_id" value={form.categoria_id} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            >
-              <option value="">Sin categoría</option>
-              {categorias.map(c => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-sm font-medium text-gray-700">Categoría</label>
+              {!creandoCategoria && (
+                <button
+                  onClick={() => setCreandoCategoria(true)}
+                  className="text-xs text-indigo-600 hover:underline"
+                >
+                  + Nueva categoría
+                </button>
+              )}
+            </div>
+
+            {/* Crear categoría inline */}
+            {creandoCategoria ? (
+              <div className="border border-indigo-200 bg-indigo-50 rounded-lg p-3 flex flex-col gap-2">
+                <p className="text-xs text-indigo-700 font-medium">Nueva categoría</p>
+                {errorCategoria && <p className="text-xs text-red-500">{errorCategoria}</p>}
+                <input
+                  value={nuevaCategoria}
+                  onChange={e => setNuevaCategoria(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCrearCategoria()}
+                  placeholder="Ej: Comida"
+                  autoFocus
+                  className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setCreandoCategoria(false); setNuevaCategoria(''); setErrorCategoria('') }}
+                    className="flex-1 text-xs border border-gray-300 text-gray-600 rounded-lg py-1.5 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCrearCategoria} disabled={guardandoCategoria}
+                    className="flex-1 text-xs bg-indigo-600 text-white rounded-lg py-1.5 hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {guardandoCategoria ? 'Creando...' : 'Crear y seleccionar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <select
+                name="categoria_id" value={form.categoria_id} onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">Sin categoría</option>
+                {categorias.length === 0 && (
+                  <option disabled>— No hay categorías, creá una —</option>
+                )}
+                {categorias.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {/* Cuotas — solo si es tarjeta crédito */}
+          {/* Cuotas — solo tarjeta crédito */}
           {form.tipo_pago === 'tarjeta_credito' && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -152,7 +230,7 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-6 border-t">
+        <div className="flex gap-3 p-6 border-t sticky bottom-0 bg-white">
           <button
             onClick={onClose}
             className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50"

@@ -56,3 +56,28 @@ export async function eliminarGasto(id) {
   const res = await fetch(`${BASE}/gastos/${id}`, { method: 'DELETE' })
   return res.json()
 }
+
+
+
+export async function crearCategoria(data) {
+  const res = await fetch(`${BASE}/categorias`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  return res.json()
+}
+
+export async function editarCategoria(id, data) {
+  const res = await fetch(`${BASE}/categorias/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  return res.json()
+}
+
+export async function eliminarCategoria(id) {
+  const res = await fetch(`${BASE}/categorias/${id}`, { method: 'DELETE' })
+  return res.json()
+}
