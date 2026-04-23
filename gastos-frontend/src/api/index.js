@@ -1,4 +1,5 @@
-const BASE = 'https://gastos-app-production-8326.up.railway.app/api'
+const BASE = import.meta.env.VITE_API_URL || '/api'
+
 // Resumen
 export async function getResumen(desde, hasta) {
   const params = new URLSearchParams()
