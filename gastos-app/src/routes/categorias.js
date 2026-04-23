@@ -26,6 +26,7 @@ router.post('/', async (req, res) => {
     );
     res.status(201).json(rows[0]);
   } catch (e) {
+    console.error('Error al crear categoría:', e);
     if (e.code === '23505') return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
     throw e;
   }
