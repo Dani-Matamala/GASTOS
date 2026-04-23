@@ -1,3 +1,4 @@
 node_modules
 gastos.db
 package-lock.json
+.env
