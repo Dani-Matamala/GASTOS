@@ -2,6 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const { initDb } = require('./database/db');
 const app = express();
+const cors = require('cors')
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*'
+}))
 
 app.use(express.json());
 
