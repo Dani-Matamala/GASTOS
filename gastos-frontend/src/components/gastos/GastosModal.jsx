@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCategorias } from '../../api'
+import { getCategorias, crearCategoria } from '../../api'
 
 const TIPOS_PAGO = [
   { value: 'efectivo', label: '💵 Efectivo' },
@@ -65,22 +65,22 @@ export default function GastoModal({ gasto, onClose, onGuardar }) {
   }
 
   const handleCrearCategoria = async () => {
-    if (!nuevaCategoria.trim()) return setErrorCategoria('Escribí un nombre')
-    setErrorCategoria('')
-    setGuardandoCategoria(true)
-    try {
-      const data = await cargarCategorias()
-      // Seleccionar la nueva categoría automáticamente
-      const nueva = data.find(c => c.nombre === nuevaCategoria.trim())
-      if (nueva) setForm(f => ({ ...f, categoria_id: nueva.id }))
-      setNuevaCategoria('')
-      setCreandoCategoria(false)
-    } catch {
-      setErrorCategoria('Error al crear la categoría')
-    } finally {
-      setGuardandoCategoria(false)
-    }
+  if (!nuevaCategoria.trim()) return setErrorCategoria('Escribí un nombre')
+  setErrorCategoria('')
+  setGuardandoCategoria(true)
+  try {
+    await crearCategoria({ nombre: nuevaCategoria.trim() })
+    const data = await cargarCategorias()
+    const nueva = data.find(c => c.nombre === nuevaCategoria.trim())
+    if (nueva) setForm(f => ({ ...f, categoria_id: nueva.id }))
+    setNuevaCategoria('')
+    setCreandoCategoria(false)
+  } catch {
+    setErrorCategoria('Error al crear la categoría')
+  } finally {
+    setGuardandoCategoria(false)
   }
+}
 
   const handleSubmit = async () => {
     if (!form.descripcion) return setError('La descripción es obligatoria')
